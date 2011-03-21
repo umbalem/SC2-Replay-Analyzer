@@ -116,7 +116,6 @@ if (isset($_FILES['userfile'])) {
 				$version = $a->getVersionString();
 				echo sprintf("Version: %s<br />\n",$version);
 
-
 				$b = $a->parseReplay();
 				$players = $b->getPlayers();
 				$recorder = $b->getRecorder();
@@ -125,22 +124,20 @@ if (isset($_FILES['userfile'])) {
 				$mapName = $b->getMapName();
 				echo sprintf("Map name: %s, Game length: %s<br />\n",$mapName,$gameLength);
 
-
 				$teamSize = $b->getTeamSize();
 
 				if($teamSize != "1v1")
 				{
 					echo "ERROR: Only 1v1 games are currently supported<br />";
+					die();
 				}
 
 				$gameSpeed = $b->getGameSpeedText();
-
 
 				echo sprintf("Team size: %s, Game speed: %s<br />\n",teamSize, $gameSpeed);
 
 				$gameRealm = $b->getRealm();
 				echo sprintf("Realm: %s<br />\n",$gameRealm);
-
 
 				//may need additional formating for DB
 				$dateAndTime = $b->getCtime();
@@ -158,6 +155,7 @@ if (isset($_FILES['userfile'])) {
 				$obsString = "";
 				$obsCount = 0;
 				$playerCount = 0;
+
 
 				echo "<br />Player Info<br />";
 				//get player info
@@ -181,14 +179,25 @@ if (isset($_FILES['userfile'])) {
 					if(!$b->isWinnerKnown())
 					{
 						echo "ERROR: Winner Unknown<br />";
+						$winner = "Unknown winner";
 					}
 
 					echo "NOTE: Comp Difficuly printed here.....<br />";
 
+					//$buildingArray[count] = array("name" => $eventarray['name'], "time" => $b->getFormattedSecs($time), "numEvents" => $value['numevents'][$eventid]);
+
+
 					if ($value['isComp'] && $b->getTeamSize() !== null)
 					{
 						$difficultyString = sprintf(" (%s)",SC2Replay::$difficultyLevels[$value['difficulty']]);
+						$name = "Computer";
+						$race = $value['race'];
+						$color = $value['color'];
+						$sColor = $value['sColor']; //color string
 						echo sprintf("Difficulty Level: %s <br />", $difficultyString);
+
+						$player_array[$playerCount] = array( "name" => $name, "race" => $race, "color" => $color, "sColor" => $sColor, "playerID" => $name, "playerType" => false);
+						$playerCount++;
 					}
 					else
 					{
@@ -197,18 +206,22 @@ if (isset($_FILES['userfile'])) {
 						$race = $value['race'];
 						$color = $value['color'];
 						$sColor = $value['sColor']; //color string
+						$playerID = $name.$gameRealm;
 
-						if(!$b->isWinnerKnown())
-						{
-							echo "ERROR: winner unknown<br />";
-						}
-
+						echo sprintf( "Plaerid: %s <br />", $playerID);
 						if (!$value['isObs'] && $value['ptype'] != 'Comp')
 						{
 							$avgApm = round($value['apmtotal'] / ($b->getGameLength()/ 60));
 
 							echo sprintf("AVG AMP (EXPEREMENTAL): %d<br />\n",$avgApm);
-							echo "TODO: APM array (GRAPH SUPPORT)<br />";
+
+							echo "Actions per second consists of an array, whose indexes are seconds since game start and values are actions for that second. Using this it is fairly straightforward to graph APM. Note that seconds that have 0 actions will not be present. <br />";
+							$apmArray = $value['apm'];
+
+							if( $value['won'] == 1 )
+							{
+								$winner = $name;
+							}
 						}
 
 						echo sprintf("Player: %d<br />\n",$playerCount);
@@ -217,6 +230,8 @@ if (isset($_FILES['userfile'])) {
 						echo sprintf("Color: %s<br />\n",$color);
 						echo sprintf("sColor: %s<br />\n",$sColor);
 						echo sprintf("Winner: %d<br />\n", $value['won']);
+
+						$player_array[$playerCount] = array( "name" => $name, "race" => $race, "color" => $color, "sColor" => $sColor, "playerID" => $playerID,"playerType" => true, "apmArray" => $apmArray );
 
 						$playerCount++;
 					}
@@ -233,6 +248,7 @@ if (isset($_FILES['userfile'])) {
 
 				echo "<br />";
 
+/* NOT NEEDED
 				echo "Total unique ability events: <br />";
 				echo "Some events appear to be unknown <br />";
 				echo "Appears to be no way to determine who did what <br />";
@@ -248,21 +264,10 @@ if (isset($_FILES['userfile'])) {
 					}
 				}
 
-
-				echo "<br />";
-			    echo "EVENTS: <br />";
-				echo "<br />";
-
-				$t = $b->getEvents();
+				//$t = $b->getEvents();
 				//create table of all events
-				$pNum = count($players);
+				//$pNum = count($players);
 
-				echo sprintf("%s (%s)<br />",$value['name'],$value['race']);
-
-				echo "TODO parse events into useable form (function works just have to format output..)<br />";
-				echo "Protocol needs to support multiple player(player 1 player 2) events per second, (unit,unit,unit)players can have mulitple events in a second<br />";
-
-/*
 				if (count($t) > 0)
 				{
 					foreach ($t as $value)
@@ -293,40 +298,178 @@ if (isset($_FILES['userfile'])) {
 */
 
 				echo "<br />";
-				echo "There is array for each event type: building-unit-upgrades (not tested)<br />";
+			    echo "EVENTS: <br />";
+				echo "<br />";
+				echo "There is array for each event type: building-unit-upgrades <br />";
 
 				//array for each type
 				foreach ($players as $value)
 				{
 					if ($value['isComp'] || $value['isObs']) continue;
 
+					echo sprintf("%s (%s)<br />",$value['name'],$value['race']);
+
+					$count = 0;
+					$playerID = "".$value['name'].$gameRealm;
+
 					foreach ($value['firstevents'] as $eventid => $time)
 					{
 						$eventarray = $b->getAbilityArray($eventid);
-						$str = sprintf("%s %s %d \n",
-									$eventarray['name'],
-									$b->getFormattedSecs($time),
-								    $value['numevents'][$eventid]);
+						$formattedEventArray[$count] = array("playerID" => $playerID, "name" => $eventarray['name'], "time" => $b->getFormattedSecs($time), "numEvents" => $value['numevents'][$eventid]);
+						echo sprintf("ID: %s Name: %s Time: %s  NumEvents: %d <br />", $formattedEventArray[$count]['playerID'], $formattedEventArray[$count]['name'], $formattedEventArray[$count]['time'], $formattedEventArray[$count]['numEvents']);
+						$count++;
+					}
+					echo "<br />";
+				}
 
-						switch ($eventarray['type'])
-						{
-							case SC2_TYPEBUILDING:
-							case SC2_TYPEBUILDINGUPGRADE:
-								$buildingTable .= $str;
-								break;
-							case SC2_TYPEUNIT:
-							case SC2_TYPEWORKER:
-								$unitTable .= $str;
-								break;
-							case SC2_TYPEUPGRADE:
-								$upgradeTable .= $str;
-								break;
-							default:
-						}
+
+				$player1 = $player_array[0];
+				$player2 = $player_array[1];
+
+				$gameID = "".$dateAndTime.$player1['name'].$player2['name'];
+
+				$myUser = "TestUser"; // I still need to setup an SQL user
+				$myPass = "be4UstUd";
+				$myDB = "SC2";
+
+				$dbhandle = odbc_connect($myDB,$myUser,$myPass)
+					or die("Couldn't connect to SQL Server $myDB");
+
+			//INSERT GAME DATA
+
+				$dt_time = date('j F Y H:i' ,$dateAndTime);
+				$dt_length = date( 'H:i', $b->getGameLength());
+
+				$query = "INSERT INTO dbo.Game ( GameID, GameLength, GameSpeed, MapName, BuildVersion, Date, Winner, Observers )
+						  VALUES ('$gameID', '$dt_length', '$gameSpeed', '$mapName', '$dt_time', '$test', '$winner', '$obsString' );";
+
+				$query_result = odbc_exec($dbhandle,$query);
+
+				if (!$query_result)
+				{
+				 	echo sprintf("ERROR: %s<br />", odbc_errormsg($dbhandle));
+				}
+
+
+			//INSERT PLAYERS
+				$player1ID = $player1['playerID'];
+				$name = $player1['name'];
+				$query = "INSERT INTO dbo.Player (PlayerID, Name)
+				          VALUES ('$player1ID','$name' );";
+
+				$query_result = odbc_exec($dbhandle,$query);
+
+				if (!$query_result)
+				{
+					echo sprintf("ERROR: %s<br />", odbc_errormsg($dbhandle));
+				}
+
+				$player2ID = $player2['playerID'];
+				$name = $player2['name'];
+				$query = "INSERT INTO dbo.Player (PlayerID, Name)
+				          VALUES ('$player2ID', '$name');";
+
+				$query_result = odbc_exec($dbhandle,$query);
+
+				if (!$query_result)
+				{
+					echo sprintf("ERROR: %s<br />", odbc_errormsg($dbhandle));
+				}
+
+			//INSERT GAME PLAYER
+				$playerType = $player1['playerType'];
+				$gamePlayer = "".$gameID.$player1ID;
+
+				$query = "INSERT INTO dbo.GamePlayer ( GamePlayerID, PlayerID, GameID, Race, Color, PlayerType )
+						  VALUES ( '$gamePlayer', '$player1ID', '$gameID', '$race', '$color', '$playerType')";
+
+				$query_result = odbc_exec($dbhandle,$query);
+
+
+				$playerType = $player2['playerType'];
+				$gamePlayer = "".$gameID.$player2ID;
+				$query = "INSERT INTO dbo.GamePlayer ( GamePlayerID, PlayerID, GameID, Race, Color, PlayerType )
+					      VALUES ( '$gamePlayer', '$player2ID', '$gameID', '$race', '$color', '$playerType')";
+
+				$query_result = odbc_exec($dbhandle,$query);
+
+				if (!$query_result)
+				{
+					echo sprintf("ERROR: %s<br />", odbc_errormsg($dbhandle));
+				}
+
+
+			//INSERT BUILD RECORD
+				$count = 0;
+
+				foreach( $formattedEventArray as $event)
+				{
+					$buildRecordID = "".$event['playerID'].$dateAndTime.$event['name'];
+
+					$name = $event['name'];
+					$time = date( 'H:i', $event['time']);
+					$numEvents = (int)$event['numEvents'];
+
+					$query = "INSERT INTO dbo.BuildRecord ( BuildRecordID, PlayerID, GameID, Name, BuildTime, Total )
+							  VALUES ( '$buildRecordID', '$player1ID', '$gameID', '$name', '$time', '$numEvents' )";
+
+					$query_result = odbc_exec($dbhandle,$query);
+
+					if (!$query_result)
+					{
+						echo sprintf("ERROR: %s<br />", odbc_errormsg($dbhandle));
+					}
+
+					$count++;
+				}
+
+			//INSERT APM
+
+				$playerID = $player1['playerID'];
+				$apmArray = $player1['apmArray'];
+
+				echo "APM";
+				echo "<br />";
+
+				foreach( $apmArray as $key => $value)
+				{
+					$interval = date( 'H:i', $key);
+					$APMID = "".$playerID.$dateAndTime.$key;
+					//echo sprintf( "Interval: %s APM: %s <br />\n", $interval, $value);
+
+					$query = "INSERT INTO dbo.APM ( APMID, PlayerID, GameID, Interval, APM )
+						  VALUES ( '$APMID', '$playerID', '$gameID', '$interval', '$value' )";
+
+					$query_result = odbc_exec($dbhandle,$query);
+
+					if (!$query_result)
+					{
+						echo sprintf("ERROR: %s<br />", odbc_errormsg($dbhandle));
 					}
 				}
 
-				//echo "<br />\n";
+				$playerID = $player2['playerID'];
+				$apmArray = $player2['apmArray'];
+
+				foreach( $apmArray as $key => $value)
+				{
+					$interval = date( 'H:i', $key);
+					$APMID = "".$playerID.$dateAndTime.$key;
+
+					$query = "INSERT INTO dbo.APM ( APMID, PlayerID, GameID, Interval, APM )
+						      VALUES ( '$APMID', '$playerID', '$gameID', '$interval', '$value' )";
+
+					$query_result = odbc_exec($dbhandle,$query);
+
+					if (!$query_result)
+					{
+						echo sprintf("ERROR: %s<br />", odbc_errormsg($dbhandle));
+					}
+				}
+
+				odbc_close($dbhandle);
+
+
 			}
 			else if ($a->getFileSize("DocumentHeader") > 0 && $a->getFileSize("Minimap.tga") > 0)
 			{
